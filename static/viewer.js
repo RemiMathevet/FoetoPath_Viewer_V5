@@ -631,6 +631,7 @@ function toggleOrganDiag(id) {
     if (idx >= 0) state.organDiagnosis.splice(idx, 1);
     else state.organDiagnosis.push(id);
     _renderOrganQuickTags();
+    annSave();
 }
 
 function _buildSignOptions() {
@@ -662,6 +663,7 @@ function toggleSignPick(id) {
     if (idx >= 0) state.signPicks.splice(idx, 1);
     else state.signPicks.push(id);
     organSignSearchUpdate();
+    annSave();
 }
 
 function _renderRetentionTags() {
@@ -691,6 +693,7 @@ function toggleRetentionPick(id) {
     if (idx >= 0) state.retentionPicks.splice(idx, 1);
     else state.retentionPicks.push(id);
     _renderRetentionTags();
+    annSave();
 }
 
 function _populateFoetusClassDropdown() {
@@ -1338,7 +1341,10 @@ function annClearAll() {
 
 async function annSave() {
     if (state.viewMode !== 'slide' || state.currentSlideIndex < 0) return;
-    if (state.annotations.length === 0 && state.slideDiagnosis.length === 0) {
+    const foetDiag = state.domain === 'foetus'
+        ? [...state.organDiagnosis, ...state.signPicks, ...state.retentionPicks]
+        : [];
+    if (state.annotations.length === 0 && state.slideDiagnosis.length === 0 && foetDiag.length === 0) {
         toast('Aucune annotation ni diagnostic', true); return;
     }
     const slide = state.slides[state.currentSlideIndex];
