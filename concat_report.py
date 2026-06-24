@@ -13,10 +13,23 @@ import argparse
 import csv
 import io
 import json
+import os
+import sqlite3
 import sys
 from pathlib import Path
 
 SLIDE_EXTENSIONS = {".mrxs", ".svs", ".ndpi", ".tiff", ".tif", ".scn", ".bif"}
+FOETO_DB = os.environ.get("FOETO_DB_PATH", str(Path.home() / "Bureau/foeto_base/syndromes_foetaux.db"))
+
+
+def _load_label_map() -> dict[str, str]:
+    """FOETO ID → label_fr lookup from syndromes_foetaux.db."""
+    if not os.path.exists(FOETO_DB):
+        return {}
+    conn = sqlite3.connect(FOETO_DB)
+    rows = conn.execute("SELECT id, label_fr FROM foeto_terms").fetchall()
+    conn.close()
+    return {r[0]: r[1] for r in rows}
 
 
 def collect_report(folder: str) -> list[dict]:
@@ -24,6 +37,8 @@ def collect_report(folder: str) -> list[dict]:
     ann_dir = folder_path / "annotations"
     slides = sorted(f for f in folder_path.iterdir()
                     if f.suffix.lower() in SLIDE_EXTENSIONS and f.is_file())
+
+    labels = _load_label_map()
 
     report = []
     for slide in slides:
@@ -43,16 +58,19 @@ def collect_report(folder: str) -> list[dict]:
             tissue = meta.get("tissue_type", "")
             if tissue:
                 entry["organs"] = [t.strip() for t in tissue.split(",") if t.strip()]
-            for diag in meta.get("slide_diagnosis", []):
-                if "_ret" in str(diag):
-                    entry["retention"].append(diag)
+            for diag_id in meta.get("slide_diagnosis", []):
+                diag_id = str(diag_id)
+                label = labels.get(diag_id, diag_id)
+                if "_ret" in diag_id:
+                    entry["retention"].append(label)
                 else:
-                    entry["diagnosis"].append(diag)
+                    entry["diagnosis"].append(label)
             for feat in geojson.get("features", []):
                 p = feat.get("properties", {})
+                class_id = p.get("class_id", "")
                 entry["annotations"].append({
-                    "class_id": p.get("class_id", ""),
-                    "label": p.get("label", ""),
+                    "class_id": class_id,
+                    "label": labels.get(class_id, p.get("label", "")),
                     "level": p.get("level", 0),
                     "tissue_type": p.get("tissue_type", ""),
                     "area_um2": p.get("area_um2"),
@@ -68,7 +86,7 @@ def format_text(report: list[dict]) -> str:
         if entry["organs"]:
             lines.append(f"  Organes : {', '.join(entry['organs'])}")
         if entry["diagnosis"]:
-            lines.append(f"  Diagnostic L0 : {', '.join(entry['diagnosis'])}")
+            lines.append(f"  Diagnostic : {', '.join(entry['diagnosis'])}")
         if entry["retention"]:
             lines.append(f"  Rétention : {', '.join(entry['retention'])}")
         if entry["annotations"]:
