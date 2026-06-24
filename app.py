@@ -741,6 +741,57 @@ def db_stats():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Annotation Report API (for hub CR generation) ────────────────────────
+
+@app.route("/api/annotations/report")
+def annotations_report():
+    """Structured annotation report for all slides in a folder — used by hub for CR histo."""
+    folder = request.args.get("folder", "")
+    root = request.args.get("root", folder)
+    if not folder or not os.path.isdir(folder):
+        return jsonify({"error": "Dossier invalide"}), 400
+
+    slides = find_slides(folder)
+    report = []
+    for slide in slides:
+        ann_path = get_annotation_path(root, slide["path"])
+        entry = {
+            "slide": slide["name"],
+            "filename": slide["filename"],
+            "organs": [],
+            "diagnosis": [],
+            "retention": [],
+            "annotations": [],
+        }
+        if ann_path.is_file():
+            try:
+                with open(ann_path, "r", encoding="utf-8") as f:
+                    geojson = json.load(f)
+                meta = geojson.get("metadata", {})
+                tissue = meta.get("tissue_type", "")
+                if tissue:
+                    entry["organs"] = [t.strip() for t in tissue.split(",") if t.strip()]
+                for diag in meta.get("slide_diagnosis", []):
+                    if "_ret" in str(diag):
+                        entry["retention"].append(diag)
+                    else:
+                        entry["diagnosis"].append(diag)
+                for feat in geojson.get("features", []):
+                    p = feat.get("properties", {})
+                    entry["annotations"].append({
+                        "class_id": p.get("class_id", ""),
+                        "label": p.get("label", ""),
+                        "level": p.get("level", 0),
+                        "tissue_type": p.get("tissue_type", ""),
+                        "area_um2": p.get("area_um2"),
+                    })
+            except Exception:
+                pass
+        report.append(entry)
+
+    return jsonify({"folder": folder, "slides": report})
+
+
 # ── Config API (labels from foeto_terms, slide_tags from viewer_config) ──
 
 FOETO_DB = os.environ.get("FOETO_DB_PATH", "/home/mathevet/Bureau/foeto_base/syndromes_foetaux.db")
