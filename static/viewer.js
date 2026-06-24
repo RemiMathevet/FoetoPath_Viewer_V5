@@ -1386,21 +1386,40 @@ async function annLoad(slidePath) {
     state.annotations = [];
     state.annHighlighted = null;
     state.slideDiagnosis = [];
+    state.organDiagnosis = [];
+    state.signPicks = [];
+    state.retentionPicks = [];
     annUpdateCount();
     try {
         const res = await fetch(`${_BASE}/api/annotations/load?root=${encodeURIComponent(state.root)}&slide_path=${encodeURIComponent(slidePath)}`);
         const data = await res.json();
         if (data.exists) {
-            if (data.metadata && data.metadata.tissue_type) {
-                const t = data.metadata.tissue_type;
-                if (SLIDE_TAGS[t]) {
-                    setTissue(t, document.querySelector(`.tissue-btn[data-tissue="${t}"]`));
+            const meta = data.metadata || {};
+            const tissue = meta.tissue_type || '';
+            const diagIds = meta.slide_diagnosis || [];
+
+            if (state.domain === 'foetus' && tissue && !SLIDE_TAGS[tissue]) {
+                // Foetus mode: restore organs + picks
+                state.selectedOrgans = tissue.split(',').map(s => s.trim()).filter(Boolean);
+                for (const id of diagIds) {
+                    if (/_ret/.test(id)) state.retentionPicks.push(id);
+                    else state.organDiagnosis.push(id);
+                }
+                _renderOrganPills();
+                // Force-fetch all organ terms then re-render with saved picks
+                FOETO_TERMS_CACHE = {}; FOETO_QUICK_CACHE = {}; FOETO_RETENTION_CACHE = {};
+                _loadOrganTerms();
+            } else {
+                // Placenta mode
+                if (tissue && SLIDE_TAGS[tissue]) {
+                    setTissue(tissue, document.querySelector(`.tissue-btn[data-tissue="${tissue}"]`));
+                }
+                if (diagIds.length) {
+                    state.slideDiagnosis = diagIds;
+                    renderDiagTags();
                 }
             }
-            if (data.metadata && data.metadata.slide_diagnosis) {
-                state.slideDiagnosis = data.metadata.slide_diagnosis;
-                renderDiagTags();
-            }
+
             if (data.features && data.features.length > 0) {
                 for (const feat of data.features) {
                     const coords = feat.geometry?.coordinates?.[0] || [];
@@ -1418,7 +1437,8 @@ async function annLoad(slidePath) {
                 }
                 annUpdateCount();
             }
-            const diagStr = state.slideDiagnosis.length > 0 ? ` | Diag: ${state.slideDiagnosis.join(', ')}` : '';
+            const allDiag = [...state.slideDiagnosis, ...state.organDiagnosis, ...state.retentionPicks];
+            const diagStr = allDiag.length > 0 ? ` | Diag: ${allDiag.length}` : '';
             toast(`${state.annotations.length} annotation(s) chargée(s)${diagStr}`);
         }
     } catch (e) {}
