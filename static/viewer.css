@@ -413,9 +413,8 @@ body {
 /* Annotation right panel */
 .ann-panel {
     width: 0; min-width: 0; background: var(--bg-secondary);
-    border-left: 1px solid var(--border); overflow: hidden;
+    border-left: 1px solid var(--border); overflow-x: hidden; overflow-y: auto;
     transition: width 0.25s, min-width 0.25s;
-    display: flex; flex-direction: column;
 }
 .ann-panel.no-transition { transition: none; }
 .ann-panel.visible { width: 340px; min-width: 280px; }
@@ -439,7 +438,6 @@ body {
 .ann-tools {
     padding: 10px 12px; border-bottom: 1px solid var(--border);
     display: flex; flex-direction: column; gap: 8px;
-    overflow-y: auto; flex: 1 1 0; min-height: 0;
 }
 .ann-tools-row { display: flex; align-items: center; gap: 8px; }
 .ann-tools-row-label {
