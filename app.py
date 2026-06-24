@@ -751,6 +751,17 @@ def annotations_report():
     if not folder or not os.path.isdir(folder):
         return jsonify({"error": "Dossier invalide"}), 400
 
+    # Resolve FOETO IDs to labels
+    label_map = {}
+    if os.path.exists(FOETO_DB):
+        fconn = sqlite3.connect(FOETO_DB)
+        label_map = {r[0]: r[1] for r in fconn.execute("SELECT id, label_fr FROM foeto_terms").fetchall()}
+        fconn.close()
+
+    def _resolve(foeto_id):
+        foeto_id = str(foeto_id)
+        return {"id": foeto_id, "label": label_map.get(foeto_id, foeto_id)}
+
     slides = find_slides(folder)
     report = []
     for slide in slides:
@@ -773,14 +784,15 @@ def annotations_report():
                     entry["organs"] = [t.strip() for t in tissue.split(",") if t.strip()]
                 for diag in meta.get("slide_diagnosis", []):
                     if "_ret" in str(diag):
-                        entry["retention"].append(diag)
+                        entry["retention"].append(_resolve(diag))
                     else:
-                        entry["diagnosis"].append(diag)
+                        entry["diagnosis"].append(_resolve(diag))
                 for feat in geojson.get("features", []):
                     p = feat.get("properties", {})
+                    cid = p.get("class_id", "")
                     entry["annotations"].append({
-                        "class_id": p.get("class_id", ""),
-                        "label": p.get("label", ""),
+                        "class_id": cid,
+                        "label": label_map.get(cid, p.get("label", "")),
                         "level": p.get("level", 0),
                         "tissue_type": p.get("tissue_type", ""),
                         "area_um2": p.get("area_um2"),
