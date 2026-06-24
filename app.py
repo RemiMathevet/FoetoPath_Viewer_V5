@@ -585,9 +585,9 @@ def annotations_save():
             "generator": "FoetoPath Slide Viewer",
             "slide_diagnosis": slide_diagnosis,
             "annotation_levels": {
-                "1": "Macro",
-                "2": "Cytoarchitecture",
-                "3": "Cellulaire",
+                "0": "Label lame",
+                "1": "Région (faible G)",
+                "2": "Histo (moyen G)",
             },
             **calibration,
         },
@@ -782,6 +782,88 @@ def api_config_labels_update():
     if "slide_tags" in data:
         db.set_config(conn, "slide_tags", data["slide_tags"])
     return jsonify({"ok": True})
+
+
+# ── Foeto terms API (organ-based fetal labels) ────────────────────────────
+
+# Sub-organs: (display_name, parent_organe, keyword_pattern)
+_SUB_ORGANS = {
+    "thymus":    ("hematolymphoide", "%thym%"),
+    "rate":      ("hematolymphoide", "%splén%"),
+    "surrenale": ("endocrine",       "%surrén%"),
+    "thyroide":  ("endocrine",       "%thyroïd%"),
+    "pancreas":  ("digestif",        "%pancré%"),
+}
+
+
+@app.route("/api/foeto/organs")
+def api_foeto_organs():
+    if not os.path.exists(FOETO_DB):
+        return jsonify({"organs": []})
+    conn = sqlite3.connect(FOETO_DB)
+    rows = conn.execute(
+        "SELECT DISTINCT organe FROM foeto_terms WHERE organe != 'placenta' ORDER BY organe"
+    ).fetchall()
+    conn.close()
+    base = [r[0] for r in rows]
+    return jsonify({"organs": base, "sub_organs": list(_SUB_ORGANS.keys())})
+
+
+@app.route("/api/foeto/terms")
+def api_foeto_terms():
+    organs = request.args.get("organs", "")
+    if not organs or not os.path.exists(FOETO_DB):
+        return jsonify({"terms": {}, "quick": {}})
+    organ_list = [o.strip() for o in organs.split(",") if o.strip()]
+
+    conn = sqlite3.connect(FOETO_DB)
+    conn.row_factory = sqlite3.Row
+
+    all_rows = []
+    real_organs = [o for o in organ_list if o not in _SUB_ORGANS]
+    sub_organs = [o for o in organ_list if o in _SUB_ORGANS]
+
+    if real_organs:
+        ph = ",".join("?" * len(real_organs))
+        all_rows += conn.execute(
+            f"SELECT id, organe, label_fr, axis, viewer_quick "
+            f"FROM foeto_terms WHERE organe IN ({ph}) AND axis IN ('pathologie','retention') "
+            f"ORDER BY organe, axis, label_fr", real_organs
+        ).fetchall()
+
+    for sub in sub_organs:
+        parent, pattern = _SUB_ORGANS[sub]
+        all_rows += [(dict(r), sub) for r in conn.execute(
+            "SELECT id, organe, label_fr, axis, viewer_quick "
+            "FROM foeto_terms WHERE organe=? AND label_fr LIKE ? AND axis IN ('pathologie','retention') "
+            "ORDER BY axis, label_fr", (parent, pattern)
+        ).fetchall()]
+
+    conn.close()
+
+    terms = {}
+    quick = {}
+    retention = {}
+    for item in all_rows:
+        if isinstance(item, tuple):
+            r, display_org = item
+        else:
+            r = dict(item)
+            display_org = r["organe"]
+        ax = r["axis"]
+        if ax == "retention":
+            retention.setdefault(display_org, []).append({
+                "id": r["id"], "label": r["label_fr"],
+            })
+        else:
+            terms.setdefault(display_org, {}).setdefault(ax, []).append({
+                "id": r["id"], "label": r["label_fr"],
+            })
+        if r["viewer_quick"]:
+            quick.setdefault(display_org, []).append({
+                "id": r["id"], "label": r["label_fr"],
+            })
+    return jsonify({"terms": terms, "quick": quick, "retention": retention})
 
 
 # ── Main ───────────────────────────────────────────────────────────────────

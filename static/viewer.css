@@ -452,6 +452,12 @@ body {
 }
 .ann-class-select:focus { border-color: var(--accent); }
 .ann-class-select option { background: var(--bg-tertiary); color: var(--text-primary); }
+.ann-class-search {
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--bg-tertiary); color: var(--text-primary); font-size: 11px;
+    font-family: 'DM Sans', sans-serif; outline: none;
+}
+.ann-class-search:focus { border-color: var(--accent); }
 .ann-class-swatch {
     width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
     border: 1px solid rgba(255,255,255,0.2);
@@ -575,6 +581,28 @@ body {
     font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 4px;
     font-family: 'JetBrains Mono', monospace;
 }
+
+/* ── Domain toggle ──────────────────────────────── */
+.ann-domain-group { display: flex; gap: 2px; }
+.ann-domain-btn {
+    padding: 4px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-muted); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+}
+.ann-domain-btn:hover { background: var(--bg-hover); }
+.ann-domain-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* ── Organ pills ───────────────────────────────── */
+.ann-organ-pills { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
+.organ-pill { font-size: 10px !important; padding: 2px 6px !important; }
+.organ-pill.selected { background: #8e44ad; border-color: #8e44ad; color: white; }
+
+/* ── Sign search results + retention ────────────── */
+.ann-sign-results {
+    display: flex; flex-wrap: wrap; gap: 3px; padding: 0 8px 4px 60px;
+    max-height: 100px; overflow-y: auto;
+}
+.retention-tag.selected { background: #e67e22; border-color: #e67e22; color: white; }
 
 /* ── Tissue type & Diagnostics ───────────────────── */
 .tissue-selector { display: flex; gap: 2px; }

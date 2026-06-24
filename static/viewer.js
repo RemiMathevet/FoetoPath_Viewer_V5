@@ -508,6 +508,20 @@ const ANN_LEVELS = { 0: 'Label lame', 1: 'Région (faible G)', 2: 'Histo (moyen 
 let LDA_CLASSES = {};
 let SLIDE_TAGS = {};
 
+// Fœtus organ state
+let FOETO_ORGANS = [];         // all available organs
+let FOETO_TERMS_CACHE = {};    // {organ: {axis: [{id,label}]}}
+let FOETO_QUICK_CACHE = {};    // {organ: [{id,label}]}
+let FOETO_RETENTION_CACHE = {}; // {organ: [{id,label}]}
+let _allFoetusOptions = [];    // flat list for search filter
+let _allSignOptions = [];      // flat list for sign search
+
+state.domain = 'placenta';     // 'placenta' or 'foetus'
+state.selectedOrgans = [];     // checked fetal organs
+state.organDiagnosis = [];     // checked quick picks (fœtus mode)
+state.retentionPicks = [];     // checked Genest retention criteria
+state.signPicks = [];          // checked signs from search
+
 fetch(_url('/api/config/labels')).then(r => r.json()).then(cfg => {
     if (cfg.lda_classes) {
         LDA_CLASSES = {};
@@ -517,6 +531,199 @@ fetch(_url('/api/config/labels')).then(r => r.json()).then(cfg => {
     annPopulateClassDropdown();
     renderDiagTags();
 }).catch(e => console.error('Labels fetch failed:', e));
+
+// Load organ list once (base + sub-organs)
+fetch(_url('/api/foeto/organs')).then(r => r.json()).then(data => {
+    FOETO_ORGANS = (data.organs || []).concat(data.sub_organs || []);
+    _renderOrganPills();
+}).catch(() => {});
+
+const _ORGAN_LABELS = {
+    cerveau:'Cerveau', coeur:'Cœur', poumon:'Poumon', foie:'Foie', rein:'Rein',
+    digestif:'Digestif', peau:'Peau', genital:'Génital', hematolymphoide:'Hémato',
+    endocrine:'Endocrine', squelette:'Squelette', muscle:'Muscle',
+    oeil_oreille:'Œil/Oreille', retention:'Rétention', multi_organe:'Multi-organe',
+    thymus:'Thymus', rate:'Rate', surrenale:'Surrénale', thyroide:'Thyroïde', pancreas:'Pancréas',
+};
+
+function setDomain(domain, el) {
+    state.domain = domain;
+    document.querySelectorAll('.ann-domain-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.getElementById('placentaTools').style.display = domain === 'placenta' ? '' : 'none';
+    document.getElementById('foetusTools').style.display = domain === 'foetus' ? '' : 'none';
+    document.getElementById('levelRow').style.display = domain === 'placenta' ? '' : 'none';
+    document.getElementById('annClassSearch').style.display = domain === 'foetus' ? '' : 'none';
+    if (domain === 'placenta') {
+        annPopulateClassDropdown();
+    } else {
+        _loadOrganTerms();
+    }
+}
+
+function _renderOrganPills() {
+    const el = document.getElementById('organPills');
+    if (!el) return;
+    el.innerHTML = FOETO_ORGANS.map(o => {
+        const sel = state.selectedOrgans.includes(o) ? 'selected' : '';
+        const label = _ORGAN_LABELS[o] || o;
+        return `<span class="ann-diag-tag organ-pill ${sel}" onclick="toggleOrgan('${o}')">${label}</span>`;
+    }).join('');
+}
+
+function toggleOrgan(organ) {
+    const idx = state.selectedOrgans.indexOf(organ);
+    if (idx >= 0) state.selectedOrgans.splice(idx, 1);
+    else state.selectedOrgans.push(organ);
+    _renderOrganPills();
+    _loadOrganTerms();
+}
+
+function _loadOrganTerms() {
+    if (state.selectedOrgans.length === 0) {
+        FOETO_TERMS_CACHE = {};
+        FOETO_QUICK_CACHE = {};
+        _renderOrganQuickTags();
+        _populateFoetusClassDropdown();
+        return;
+    }
+    const needed = state.selectedOrgans.filter(o => !(o in FOETO_TERMS_CACHE));
+    if (needed.length === 0) {
+        _renderOrganQuickTags();
+        _populateFoetusClassDropdown();
+        return;
+    }
+    fetch(_url('/api/foeto/terms?organs=' + state.selectedOrgans.join(','))).then(r => r.json()).then(data => {
+        Object.assign(FOETO_TERMS_CACHE, data.terms || {});
+        Object.assign(FOETO_QUICK_CACHE, data.quick || {});
+        Object.assign(FOETO_RETENTION_CACHE, data.retention || {});
+        _renderOrganQuickTags();
+        _renderRetentionTags();
+        _buildSignOptions();
+        _populateFoetusClassDropdown();
+    }).catch(() => {});
+}
+
+function _renderOrganQuickTags() {
+    const el = document.getElementById('organQuickTags');
+    if (!el) return;
+    if (state.selectedOrgans.length === 0) {
+        el.innerHTML = '<span style="font-size:10px;color:var(--text-muted);">Cochez des organes</span>';
+        return;
+    }
+    let html = '';
+    for (const org of state.selectedOrgans) {
+        const quick = FOETO_QUICK_CACHE[org] || [];
+        if (quick.length === 0) continue;
+        const label = _ORGAN_LABELS[org] || org;
+        html += `<span style="font-size:9px;color:var(--text-muted);width:100%;margin-top:2px;">${label}</span>`;
+        html += quick.map(t => {
+            const sel = state.organDiagnosis.includes(t.id) ? 'selected' : '';
+            const short = t.label.length > 40 ? t.label.slice(0, 38) + '…' : t.label;
+            return `<span class="ann-diag-tag ${sel}" title="${t.label}" onclick="toggleOrganDiag('${t.id}')">${short}</span>`;
+        }).join('');
+    }
+    el.innerHTML = html || '<span style="font-size:10px;color:var(--text-muted);">Aucun signe rapide</span>';
+}
+
+function toggleOrganDiag(id) {
+    const idx = state.organDiagnosis.indexOf(id);
+    if (idx >= 0) state.organDiagnosis.splice(idx, 1);
+    else state.organDiagnosis.push(id);
+    _renderOrganQuickTags();
+}
+
+function _buildSignOptions() {
+    _allSignOptions = [];
+    for (const org of state.selectedOrgans) {
+        const byAxis = FOETO_TERMS_CACHE[org] || {};
+        const label = _ORGAN_LABELS[org] || org;
+        for (const terms of Object.values(byAxis)) {
+            for (const t of terms) _allSignOptions.push({ ...t, org, orgLabel: label });
+        }
+    }
+}
+
+function organSignSearchUpdate() {
+    const q = (document.getElementById('organSignSearch').value || '').toLowerCase().trim();
+    const el = document.getElementById('organSignResults');
+    if (!q || q.length < 2) { el.innerHTML = ''; return; }
+    const hits = _allSignOptions.filter(t => t.label.toLowerCase().includes(q)).slice(0, 15);
+    if (hits.length === 0) { el.innerHTML = '<span style="font-size:10px;color:var(--text-muted);padding:2px 4px;">Aucun résultat</span>'; return; }
+    el.innerHTML = hits.map(t => {
+        const sel = state.signPicks.includes(t.id) ? 'selected' : '';
+        const short = t.label.length > 55 ? t.label.slice(0, 53) + '…' : t.label;
+        return `<span class="ann-diag-tag ${sel}" title="${t.orgLabel}: ${t.label}" onclick="toggleSignPick('${t.id}')">${short}</span>`;
+    }).join('');
+}
+
+function toggleSignPick(id) {
+    const idx = state.signPicks.indexOf(id);
+    if (idx >= 0) state.signPicks.splice(idx, 1);
+    else state.signPicks.push(id);
+    organSignSearchUpdate();
+}
+
+function _renderRetentionTags() {
+    const el = document.getElementById('retentionTags');
+    if (!el) return;
+    if (state.selectedOrgans.length === 0) {
+        el.innerHTML = '<span style="font-size:10px;color:var(--text-muted);">Cochez des organes</span>';
+        return;
+    }
+    let html = '';
+    for (const org of state.selectedOrgans) {
+        const items = FOETO_RETENTION_CACHE[org] || [];
+        if (items.length === 0) continue;
+        const label = _ORGAN_LABELS[org] || org;
+        html += `<span style="font-size:9px;color:var(--text-muted);width:100%;margin-top:2px;">${label}</span>`;
+        html += items.map(t => {
+            const sel = state.retentionPicks.includes(t.id) ? 'selected' : '';
+            const short = t.label.length > 50 ? t.label.slice(0, 48) + '…' : t.label;
+            return `<span class="ann-diag-tag retention-tag ${sel}" title="${t.label}" onclick="toggleRetentionPick('${t.id}')">${short}</span>`;
+        }).join('');
+    }
+    el.innerHTML = html || '<span style="font-size:10px;color:var(--text-muted);">Pas de critères de rétention</span>';
+}
+
+function toggleRetentionPick(id) {
+    const idx = state.retentionPicks.indexOf(id);
+    if (idx >= 0) state.retentionPicks.splice(idx, 1);
+    else state.retentionPicks.push(id);
+    _renderRetentionTags();
+}
+
+function _populateFoetusClassDropdown() {
+    const sel = document.getElementById('annClassSelect');
+    if (!sel) return;
+    _allFoetusOptions = [];
+    let html = '';
+    for (const org of state.selectedOrgans) {
+        const byAxis = FOETO_TERMS_CACHE[org] || {};
+        const label = _ORGAN_LABELS[org] || org;
+        for (const [axis, terms] of Object.entries(byAxis)) {
+            html += `<optgroup label="${label} — ${axis}">`;
+            for (const t of terms) {
+                html += `<option value="${t.id}">${t.label}</option>`;
+                _allFoetusOptions.push({ id: t.id, label: t.label, org, axis });
+            }
+            html += '</optgroup>';
+        }
+    }
+    sel.innerHTML = html || '<option value="">Sélectionnez des organes</option>';
+    annOnClassChange();
+}
+
+function annFilterClasses() {
+    const q = (document.getElementById('annClassSearch').value || '').toLowerCase().trim();
+    const sel = document.getElementById('annClassSelect');
+    if (!q) { _populateFoetusClassDropdown(); return; }
+    const filtered = _allFoetusOptions.filter(t => t.label.toLowerCase().includes(q));
+    sel.innerHTML = filtered.length === 0
+        ? '<option value="">Aucun résultat</option>'
+        : filtered.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+    annOnClassChange();
+}
 
 function setTissue(tissue, el) {
     const changed = state.tissueType !== tissue;
@@ -559,6 +766,7 @@ function ldaGetSelectedClass() {
 }
 
 function annPopulateClassDropdown() {
+    if (state.domain === 'foetus') { _populateFoetusClassDropdown(); return; }
     const sel = document.getElementById('annClassSelect');
     if (!sel) return;
     const classes = LDA_CLASSES[state.annLevel] || [];
@@ -569,8 +777,13 @@ function annPopulateClassDropdown() {
 }
 
 function annOnClassChange() {
-    const cls = ldaGetSelectedClass();
     const swatch = document.getElementById('annClassSwatch');
+    if (state.domain === 'foetus') {
+        state.annColor = '#3498db';
+        swatch.style.background = '#3498db';
+        return;
+    }
+    const cls = ldaGetSelectedClass();
     if (cls) {
         state.annColor = cls.color;
         swatch.style.background = cls.color;
@@ -747,18 +960,31 @@ function annDrawPath(ctx, points, color, closed, highlighted) {
 
 function annFinishStroke() {
     if (state.annCurrentPath.length > 5) {
-        const cls = ldaGetSelectedClass();
         const note = document.getElementById('annLabelInput').value.trim();
-        const label = note ? `${cls ? cls.label : ANN_LEVELS[state.annLevel]}: ${note}` : (cls ? cls.label : ANN_LEVELS[state.annLevel]);
+        let label, classId, color, tissueType, level;
+        if (state.domain === 'foetus') {
+            const sel = document.getElementById('annClassSelect');
+            classId = sel ? sel.value : '';
+            const opt = sel ? sel.options[sel.selectedIndex] : null;
+            const classLabel = opt ? opt.textContent : '';
+            label = note ? `${classLabel}: ${note}` : classLabel;
+            color = '#3498db';
+            tissueType = state.selectedOrgans.join(',');
+            level = 0;
+        } else {
+            const cls = ldaGetSelectedClass();
+            classId = cls ? cls.id : '';
+            label = note ? `${cls ? cls.label : ANN_LEVELS[state.annLevel]}: ${note}` : (cls ? cls.label : ANN_LEVELS[state.annLevel]);
+            color = cls ? cls.color : state.annColor;
+            tissueType = state.tissueType;
+            level = state.annLevel;
+        }
         state.annotations.push({
             id: 'ann_' + (++annIdCounter),
             points_px: [...state.annCurrentPath],
-            color: cls ? cls.color : state.annColor,
-            label: label,
-            class_id: cls ? cls.id : '',
-            tissue_type: state.tissueType,
-            level: state.annLevel,
-            created: new Date().toISOString(),
+            color, label, class_id: classId,
+            tissue_type: tissueType,
+            level, created: new Date().toISOString(),
         });
         annUpdateCount();
         annRenderList();
@@ -1134,10 +1360,14 @@ async function annSave() {
         };
     });
     try {
+        const diagnosis = state.domain === 'foetus'
+            ? [...state.organDiagnosis, ...state.signPicks, ...state.retentionPicks]
+            : state.slideDiagnosis;
+        const tissueType = state.domain === 'foetus' ? state.selectedOrgans.join(',') : state.tissueType;
         const res = await api('/api/annotations/save', {
             root: state.root, slide_path: slide.path, features: features,
-            tissue_type: state.tissueType,
-            slide_diagnosis: state.slideDiagnosis,
+            tissue_type: tissueType,
+            slide_diagnosis: diagnosis,
         });
         if (res.ok) {
             const diagStr = state.slideDiagnosis.length > 0 ? ` | Diag: ${state.slideDiagnosis.join(', ')}` : '';

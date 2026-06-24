@@ -243,8 +243,19 @@
             <button class="ann-panel-close" onclick="toggleAnnotationMode()" title="Fermer">&times;</button>
         </div>
 
-        <!-- Tissue type + diagnostics -->
+        <!-- Domain toggle -->
         <div class="ann-tools">
+            <div class="ann-tools-row">
+                <span class="ann-tools-row-label">Mode</span>
+                <div class="ann-domain-group">
+                    <button class="ann-domain-btn active" data-domain="placenta" onclick="setDomain('placenta', this)">Placenta</button>
+                    <button class="ann-domain-btn" data-domain="foetus" onclick="setDomain('foetus', this)">F&#339;tus</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Placenta tissue + diagnostics -->
+        <div class="ann-tools" id="placentaTools">
             <div class="ann-tools-row">
                 <span class="ann-tools-row-label">Tissu</span>
                 <div class="tissue-selector" id="tissueSelector">
@@ -259,13 +270,38 @@
             </div>
         </div>
 
+        <!-- Foetus organ selector -->
+        <div class="ann-tools" id="foetusTools" style="display:none">
+            <div class="ann-tools-row" style="align-items:flex-start;flex-wrap:wrap;">
+                <span class="ann-tools-row-label" style="margin-top:3px;">Organes</span>
+                <div class="ann-organ-pills" id="organPills"></div>
+            </div>
+            <div class="ann-tools-row">
+                <span class="ann-tools-row-label">Autre</span>
+                <input type="text" class="ann-input" id="organFreeText" placeholder="P&#233;ricarde, m&#233;sent&#232;re...">
+            </div>
+            <div class="ann-tools-row" style="align-items:flex-start;flex-wrap:wrap;" id="organQuickRow">
+                <span class="ann-tools-row-label" style="margin-top:3px;">Signes</span>
+                <div class="ann-diag-tags" id="organQuickTags"></div>
+            </div>
+            <div class="ann-tools-row">
+                <span class="ann-tools-row-label">Patho</span>
+                <input type="text" class="ann-input" id="organSignSearch" placeholder="Rechercher un signe..." oninput="organSignSearchUpdate()">
+            </div>
+            <div class="ann-sign-results" id="organSignResults"></div>
+            <div class="ann-tools-row" style="align-items:flex-start;flex-wrap:wrap;" id="retentionRow">
+                <span class="ann-tools-row-label" style="margin-top:3px;">R&#233;tention</span>
+                <div class="ann-diag-tags" id="retentionTags"></div>
+            </div>
+        </div>
+
         <!-- Drawing tools (LDA) -->
         <div class="ann-tools">
-            <div class="ann-tools-row">
+            <div class="ann-tools-row" id="levelRow">
                 <span class="ann-tools-row-label">Niveau</span>
                 <div class="ann-level-group" id="annLevels">
                     <button class="ann-level-btn active" onclick="annSetLevel(0, this)">0 Label</button>
-                    <button class="ann-level-btn" onclick="annSetLevel(1, this)">1 Région</button>
+                    <button class="ann-level-btn" onclick="annSetLevel(1, this)">1 R&#233;gion</button>
                     <button class="ann-level-btn" onclick="annSetLevel(2, this)">2 Histo</button>
                 </div>
             </div>
@@ -273,6 +309,8 @@
                 <span class="ann-tools-row-label">Classe</span>
                 <div class="ann-class-swatch" id="annClassSwatch" style="background:#27ae60"></div>
                 <select class="ann-class-select" id="annClassSelect" onchange="annOnClassChange()"></select>
+                <input type="text" class="ann-input ann-class-search" id="annClassSearch"
+                       placeholder="Rechercher..." oninput="annFilterClasses()" style="display:none; max-width:120px; margin-left:4px;">
             </div>
             <div class="ann-tools-row">
                 <span class="ann-tools-row-label">Note</span>
