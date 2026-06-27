@@ -2306,36 +2306,36 @@ const CTX_PLACENTA_TREE = {
         label: 'Cordon',
         items: [
             { label: 'Normal', action: 'normal' },
-            { label: 'Artère ombilicale unique', id: 'FOETO:0100217_ch11' },
-            { label: 'RIF 1 — Phlébite ombilicale', id: 'FOETO:0100363' },
-            { label: 'RIF 2 — Artérite / Funiculite', id: 'FOETO:0100364' },
-            { label: 'RIF 3 — Funiculite concentrique', id: 'FOETO:0100394' },
-            { label: 'Nécrose (rétention)', id: 'FOETO:0100239_ernst_ret' },
+            { label: 'Artère ombilicale unique', id: 'FOETO:PP.COR-NOR-001' },
+            { label: 'RIF 1 — Phlébite ombilicale', id: 'FOETO:PP.COR-INF-003' },
+            { label: 'RIF 2 — Artérite / Funiculite', id: 'FOETO:PP.COR-INF-004' },
+            { label: 'RIF 3 — Funiculite concentrique', id: 'FOETO:PP.COR-INF-005' },
+            { label: 'Nécrose (rétention)', id: 'FOETO:PP.COR-RET-002' },
         ]
     },
     membranes: {
         label: 'Membranes',
         items: [
             { label: 'Normales', action: 'normal' },
-            { label: 'MIR 1 — Chorionite subchoriale', id: 'FOETO:0100369' },
-            { label: 'MIR 2 — Chorioamniotite aiguë', id: 'FOETO:0100370' },
-            { label: 'MIR 3 — Chorioamniotite nécrosante', id: 'FOETO:0100371' },
-            { label: 'Nécrose laminaire', id: 'FOETO:0100218_ch26' },
+            { label: 'MIR 1 — Chorionite subchoriale', id: 'FOETO:PP.MEM-INF-010' },
+            { label: 'MIR 2 — Chorioamniotite aiguë', id: 'FOETO:PP.MEM-INF-011' },
+            { label: 'MIR 3 — Chorioamniotite nécrosante', id: 'FOETO:PP.MEM-INF-012' },
+            { label: 'Nécrose laminaire', id: 'FOETO:PP.MEM-CLA-003' },
         ]
     },
     parenchyme: {
         label: 'Parenchyme',
         items: [
             { label: 'Normal', action: 'normal' },
-            { label: 'MIR 1 — Chorionite subchoriale', id: 'FOETO:0100369' },
-            { label: 'MIR 2 — Chorioamniotite aiguë', id: 'FOETO:0100370' },
-            { label: 'MIR 3 — Chorioamniotite nécrosante', id: 'FOETO:0100371' },
-            { label: 'HVD — Hypoplasie villositaire distale', id: 'FOETO:0100373' },
-            { label: 'Excès fibrine périvillositaire', id: 'FOETO:0100391' },
-            { label: 'VUE bas grade', id: 'FOETO:0100377' },
-            { label: 'VUE haut grade', id: 'FOETO:0100376' },
-            { label: 'Déciduite chronique', id: 'FOETO:0100209_ch26' },
-            { label: 'Artériopathie déciduale', id: 'FOETO:0100372' },
+            { label: 'MIR 1 — Chorionite subchoriale', id: 'FOETO:PP.MEM-INF-010' },
+            { label: 'MIR 2 — Chorioamniotite aiguë', id: 'FOETO:PP.MEM-INF-011' },
+            { label: 'MIR 3 — Chorioamniotite nécrosante', id: 'FOETO:PP.MEM-INF-012' },
+            { label: 'HVD — Hypoplasie villositaire distale', id: 'FOETO:PP.PAR-VAS-014' },
+            { label: 'Excès fibrine périvillositaire', id: 'FOETO:PP.PAR-VAS-007' },
+            { label: 'VUE bas grade', id: 'FOETO:PP.PAR-VAS-024' },
+            { label: 'VUE haut grade', id: 'FOETO:PP.PAR-VAS-023' },
+            { label: 'Déciduite chronique', id: 'FOETO:PP.MEM-INF-007' },
+            { label: 'Artériopathie déciduale', id: 'FOETO:PP.PAR-VAS-013' },
         ]
     }
 };
