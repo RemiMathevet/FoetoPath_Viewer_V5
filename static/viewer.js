@@ -25,6 +25,7 @@ let state = {
     // Calibration
     mppX: 0,
     mppY: 0,
+    objectivePower: 0,
     // Measurement tool
     measureMode: false,
     measurements: [],       // [{id, start:[x,y], end:[x,y], distUm}]
@@ -94,7 +95,7 @@ function createOSD(tileSources) {
     });
     state.osdViewer.innerTracker.keyHandler = null;
     state.osdViewer.innerTracker.keyDownHandler = null;
-    state.osdViewer.addHandler('open', () => setLoading(false));
+    state.osdViewer.addHandler('open', () => { setLoading(false); updateZoomIndicator(); });
     state.osdViewer.addHandler('open-failed', () => {
         setLoading(false);
         toast('Erreur ouverture', true);
@@ -103,6 +104,23 @@ function createOSD(tileSources) {
     annAttachViewportHandler();
     // Re-apply display filters (persist across slide switches)
     updateDisplayFilters();
+}
+
+function updateZoomIndicator() {
+    const el = document.getElementById('zoomIndicator');
+    if (!state.osdViewer || !state.osdViewer.viewport || !state.osdViewer.world.getItemCount()) { el.textContent = ''; return; }
+    const vp = state.osdViewer.viewport;
+    const containerW = state.osdViewer.container.clientWidth;
+    const tiledImage = state.osdViewer.world.getItemAt(0);
+    const imageW = tiledImage.getContentSize().x;
+    // OSD zoom = viewport-widths per image-width; convert to pixels ratio
+    const pxRatio = vp.getZoom(true) * containerW / imageW;
+    if (state.objectivePower > 0) {
+        const mag = state.objectivePower * pxRatio;
+        el.textContent = mag >= 1 ? `×${mag.toFixed(1)}` : `×${mag.toFixed(2)}`;
+    } else {
+        el.textContent = `${(pxRatio * 100).toFixed(0)}%`;
+    }
 }
 
 // ── Load Cases ───────────────────────────────────────────
@@ -262,6 +280,7 @@ async function loadSlide(index) {
             const mpx = ((w * h) / 1e6).toFixed(1);
             state.mppX = info.mpp_x || 0;
             state.mppY = info.mpp_y || 0;
+            state.objectivePower = info.objective_power || 0;
             const mppStr = state.mppX > 0 ? `  \u00b7  ${state.mppX.toFixed(3)} \u00b5m/px` : '';
             document.getElementById('slideMeta').textContent =
                 `${slide.name}  \u00b7  ${w.toLocaleString()} \u00d7 ${h.toLocaleString()} px  \u00b7  ${mpx} Mpx${mppStr}`;
@@ -1518,6 +1537,7 @@ function annAttachViewportHandler() {
             || state.measurements.length > 0 || state.measurePending) {
             annResizeCanvas(); annRender();
         }
+        updateZoomIndicator();
     });
     state.osdViewer.addHandler('resize', () => { annResizeCanvas(); annRender(); });
 }

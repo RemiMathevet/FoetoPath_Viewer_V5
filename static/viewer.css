@@ -177,6 +177,13 @@ body {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
 }
 
+.zoom-indicator {
+    position: absolute; bottom: calc(var(--carousel-h) + 8px); left: calc(var(--sidebar-w) + 12px);
+    z-index: 50; background: rgba(0,0,0,0.6); color: var(--text-primary); padding: 4px 10px;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+    pointer-events: none; font-variant-numeric: tabular-nums;
+}
+
 /* ── Label Popup ─────────────────────────────────── */
 .label-popup {
     position: absolute; top: 12px; left: 50%; transform: translateX(-50%);

@@ -276,6 +276,7 @@ def slide_info():
             "overlap": TILE_OVERLAP,
             "mpp_x": mpp_x,
             "mpp_y": mpp_y,
+            "objective_power": float(props.get("openslide.objective-power", 0) or 0),
             "properties": {k: v for k, v in props.items() if len(v) < 500},
         })
     except Exception as e:
@@ -362,6 +363,8 @@ def slide_label():
         images = slide.associated_images
         if img_type in images:
             img = images[img_type]
+            if img.mode == "RGBA":
+                img = img.convert("RGB")
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=90)
             buf.seek(0)
