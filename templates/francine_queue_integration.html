@@ -1,0 +1,153 @@
+<!--
+  ============================================================
+  FRANCINE Queue — Snippet d'intégration dans le viewer Flask
+  ============================================================
+
+  1. Copier francine_queue.js dans static/
+  2. Enregistrer francine_queue_bp.py et appeler init_queue_db(app)
+  3. Coller ce snippet dans le template du viewer
+
+  Dans app.py :
+    from francine_queue_bp import francine_bp, init_queue_db
+    app.register_blueprint(francine_bp)
+    with app.app_context():
+        init_queue_db(app)
+-->
+
+<!-- ── Dans <head> ────────────────────────────────────────── -->
+<style>
+  /* Panneau droit redimensionnable — à adapter selon ta mise en page */
+  .viewer-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .viewer-main {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+  }
+  .francine-sidebar {
+    width: 320px;
+    min-width: 240px;
+    max-width: 500px;
+    flex-shrink: 0;
+    border-left: 1px solid #313244;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e2e;
+    /* Redimensionnement drag manuel si besoin — voir note ci-dessous */
+  }
+  #francine-panel-root {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+</style>
+
+<!-- ── Dans <body>, à côté de ton viewer OpenSeadragon ──── -->
+<div class="viewer-layout">
+
+  <!-- Ton viewer existant -->
+  <div class="viewer-main">
+    <div id="osd-viewer"></div>
+    <!-- ... tes contrôles existants ... -->
+  </div>
+
+  <!-- Sidebar FRANCINE -->
+  <div class="francine-sidebar">
+    <div id="francine-panel-root"></div>
+  </div>
+
+</div>
+
+<!-- ── En bas de <body> ──────────────────────────────────── -->
+<script src="/static/francine_queue.js"></script>
+<script>
+  // ── Variable globale mise à jour par ton code de chargement de lame ──
+  //    (tu l'as probablement déjà sous un autre nom)
+  window.currentSlidePath = null;
+
+  // ── Initialisation du panneau ────────────────────────────────────────
+  const francineQueue = new FrancineQueue({
+    getCurrentSlidePath: () => window.currentSlidePath,
+    refreshInterval: 10000,   // poll toutes les 10s
+    apiBase: '/francine',
+  });
+  francineQueue.mount(document.getElementById('francine-panel-root'));
+
+  // ── Hook à appeler depuis ton code quand une lame est chargée ────────
+  //    Exemple : dans ta fonction loadSlide(slidePath) existante, ajouter :
+  //
+  //    window.currentSlidePath = slidePath;
+  //    francineQueue.updateCurrentSlide(slidePath);
+  //
+  //    Ou si tu charges via URL params au démarrage :
+  //    const params = new URLSearchParams(location.search);
+  //    const initialSlide = params.get('slide');
+  //    if (initialSlide) francineQueue.updateCurrentSlide(initialSlide);
+</script>
+
+<!--
+  ============================================================
+  Intégration dans app.py — résumé complet
+  ============================================================
+
+  from francine_queue_bp import francine_bp, init_queue_db
+
+  app = Flask(__name__)
+  app.register_blueprint(francine_bp)   # routes sous /francine/...
+  init_queue_db(app)                    # crée la table si besoin
+
+  Routes disponibles après intégration :
+    GET  /francine/queue                 → liste toutes les entrées
+    GET  /francine/queue?status=pending  → filtre par statut
+    POST /francine/queue/add             → ajouter une lame
+    DEL  /francine/queue/<id>            → retirer une entrée
+    POST /francine/queue/clear_done      → nettoyer terminées/erreurs
+    GET  /francine/queue/stats           → compteurs par statut
+    GET  /francine/queue/export          → JSON pipeline (in-memory)
+    GET  /francine/queue/export_file     → JSON pipeline (download)
+    POST /francine/queue/update_status   → webhook depuis le pipeline
+
+  Format JSON exporté (compatible pipeline V1.2 --queue) :
+  [
+    {"slide_path": "/data/lames/25P12345_1_1.mrxs",
+     "tissue_type": "cordon",
+     "magnification": "x5"},
+    {"slide_path": "/data/lames/25P12345_1_1.mrxs",
+     "tissue_type": "cordon",
+     "magnification": "x20"},
+    ...
+  ]
+  (une entrée par lame×magnification)
+
+  Lancer le pipeline depuis le P620 sur la queue exportée :
+    python foetopath_pipeline_v2.py \
+        /dummy \
+        /media/toshiba1/embeddings/FRANCINE \
+        --queue /tmp/francine_queue_20260405_143012.json
+
+  Ou via l'endpoint export direct (si le pipeline tourne sur la même machine) :
+    import requests
+    queue_data = requests.get('http://localhost:5000/francine/queue/export?mark_running=1').json()
+    # → Passer queue_data directement à pipeline.run() si intégré
+
+  ============================================================
+  Webhook status depuis le pipeline (optionnel)
+  ============================================================
+
+  Dans foetopath_pipeline_v2.py, ajouter après sauvegarde HDF5 :
+
+    try:
+        import requests
+        requests.post('http://nipogi:5000/francine/queue/update_status', json={
+            'slide_path' : slide_path,
+            'status'     : 'done',
+            'n_patches'  : n_patches,
+        }, timeout=3)
+    except Exception:
+        pass  # silencieux si le viewer n'est pas accessible
+
+-->
