@@ -629,6 +629,14 @@ body {
 .ann-diag-tag.selected { background: var(--accent-dim); border-color: var(--accent); color: white; }
 .sim-btn { cursor: pointer; margin-left: 2px; font-size: 11px; opacity: 0.7; }
 .sim-btn:hover { opacity: 1; }
+.grade-btns { display: inline-flex; gap: 1px; margin-left: 2px; vertical-align: middle; }
+.grade-btn {
+    font-size: 9px; padding: 1px 4px; border-radius: 3px; cursor: pointer;
+    background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border);
+    font-weight: 600; line-height: 1.2;
+}
+.grade-btn:hover { border-color: var(--accent); color: var(--accent); }
+.grade-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 .tag-group-label {
     width: 100%; font-size: 8px; color: var(--accent); text-transform: uppercase;
     letter-spacing: 0.5px; margin-top: 4px; font-weight: 600;

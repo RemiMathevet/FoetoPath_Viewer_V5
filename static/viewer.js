@@ -558,6 +558,7 @@ let FOETO_ORGANS = [];         // all available organs
 let FOETO_TERMS_CACHE = {};    // {organ: {axis: [{id,label}]}}
 let FOETO_QUICK_CACHE = {};    // {organ: [{id,label}]}
 let FOETO_RETENTION_CACHE = {}; // {organ: [{id,label}]}
+let FOETO_GRADES = {};         // {term_id: [{grade, desc}]}
 let _allFoetusOptions = [];    // flat list for search filter
 let _allSignOptions = [];      // flat list for sign search
 
@@ -577,11 +578,19 @@ fetch(_url('/api/config/labels')).then(r => r.json()).then(cfg => {
     renderDiagTags();
 }).catch(e => console.error('Labels fetch failed:', e));
 
-// Load organ list once (base + sub-organs)
+// Load organ list + grades once
 fetch(_url('/api/foeto/organs')).then(r => r.json()).then(data => {
     FOETO_ORGANS = (data.organs || []).concat(data.sub_organs || []);
     _renderOrganPills();
 }).catch(() => {});
+fetch(_url('/api/foeto/grades')).then(r => r.json()).then(data => {
+    FOETO_GRADES = data.grades || {};
+}).catch(() => {});
+
+function _diagBaseId(diagStr) { return diagStr.replace(/\.G\d+$/, ''); }
+function _diagGrade(diagStr) { const m = diagStr.match(/\.G(\d+)$/); return m ? parseInt(m[1]) : 0; }
+function _findDiagEntry(list, termId) { return list.find(d => _diagBaseId(d) === termId); }
+function _isGradable(termId) { return !!FOETO_GRADES[termId]; }
 
 const _ORGAN_LABELS = {
     cerveau:'Cerveau', coeur:'Cœur', poumon:'Poumon', foie:'Foie', rein:'Rein',
@@ -2175,10 +2184,18 @@ function labelRenderQuickTags() {
         for (const [grp, items] of Object.entries(grouped)) {
             if (grp) html += `<span class="tag-group-label">${grp}</span>`;
             html += items.map(t => {
-                const sel = state.labelDiagnoses.includes(t.id) ? 'selected' : '';
+                const entry = _findDiagEntry(state.labelDiagnoses, t.id);
+                const sel = entry ? 'selected' : '';
                 const short = t.label.length > 40 ? t.label.slice(0, 38) + '...' : t.label;
                 const simBtn = sel ? ` <span class="sim-btn" onclick="event.stopPropagation();openSimilar('${t.id}')" title="Lames similaires">&#128269;</span>` : '';
-                return `<span class="ann-diag-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>`;
+                let gradeHtml = '';
+                if (sel && _isGradable(t.id)) {
+                    const g = _diagGrade(entry);
+                    gradeHtml = `<span class="grade-btns">${FOETO_GRADES[t.id].map(gi =>
+                        `<span class="grade-btn${g===gi.grade?' active':''}" title="${gi.desc}" onclick="event.stopPropagation();labelSetGrade('${t.id}',${gi.grade})">G${gi.grade}</span>`
+                    ).join('')}</span>`;
+                }
+                return `<span class="ann-diag-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>${gradeHtml}`;
             }).join('');
         }
     }
@@ -2186,10 +2203,19 @@ function labelRenderQuickTags() {
 }
 
 function labelToggleDiag(id) {
-    const idx = state.labelDiagnoses.indexOf(id);
-    if (idx >= 0) state.labelDiagnoses.splice(idx, 1);
+    const existing = _findDiagEntry(state.labelDiagnoses, id);
+    if (existing) state.labelDiagnoses.splice(state.labelDiagnoses.indexOf(existing), 1);
     else state.labelDiagnoses.push(id);
-    labelRenderQuickTags();
+    labelRenderQuickTags(); labelRenderRetentionTags();
+}
+
+function labelSetGrade(termId, grade) {
+    const existing = _findDiagEntry(state.labelDiagnoses, termId);
+    if (existing) state.labelDiagnoses.splice(state.labelDiagnoses.indexOf(existing), 1);
+    const cur = _diagGrade(existing || '');
+    // ponytail: toggle off if same grade clicked again
+    state.labelDiagnoses.push(cur === grade ? termId : `${termId}.G${grade}`);
+    labelRenderQuickTags(); labelRenderRetentionTags();
 }
 
 function labelRenderRetentionTags() {
@@ -2203,10 +2229,18 @@ function labelRenderRetentionTags() {
         const label = _ORGAN_LABELS[org] || org;
         html += `<span style="font-size:9px;color:var(--text-muted);width:100%;margin-top:2px;">${label}</span>`;
         html += items.map(t => {
-            const sel = state.labelDiagnoses.includes(t.id) ? 'selected' : '';
+            const entry = _findDiagEntry(state.labelDiagnoses, t.id);
+            const sel = entry ? 'selected' : '';
             const short = t.label.length > 50 ? t.label.slice(0, 48) + '...' : t.label;
             const simBtn = sel ? ` <span class="sim-btn" onclick="event.stopPropagation();openSimilar('${t.id}')" title="Lames similaires">&#128269;</span>` : '';
-            return `<span class="ann-diag-tag retention-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>`;
+            let gradeHtml = '';
+            if (sel && _isGradable(t.id)) {
+                const g = _diagGrade(entry);
+                gradeHtml = `<span class="grade-btns">${FOETO_GRADES[t.id].map(gi =>
+                    `<span class="grade-btn${g===gi.grade?' active':''}" title="${gi.desc}" onclick="event.stopPropagation();labelSetGrade('${t.id}',${gi.grade})">G${gi.grade}</span>`
+                ).join('')}</span>`;
+            }
+            return `<span class="ann-diag-tag retention-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>${gradeHtml}`;
         }).join('');
     }
     el.innerHTML = html || '';
@@ -2231,10 +2265,18 @@ function labelSignSearchUpdate() {
     const hits = _labelSignOptions.filter(t => t.label.toLowerCase().includes(q)).slice(0, 15);
     if (hits.length === 0) { el.innerHTML = '<span style="font-size:10px;color:var(--text-muted);padding:2px 4px;">Aucun résultat</span>'; return; }
     el.innerHTML = hits.map(t => {
-        const sel = state.labelDiagnoses.includes(t.id) ? 'selected' : '';
+        const entry = _findDiagEntry(state.labelDiagnoses, t.id);
+        const sel = entry ? 'selected' : '';
         const short = t.label.length > 55 ? t.label.slice(0, 53) + '...' : t.label;
         const simBtn = sel ? ` <span class="sim-btn" onclick="event.stopPropagation();openSimilar('${t.id}')" title="Lames similaires">&#128269;</span>` : '';
-        return `<span class="ann-diag-tag ${sel}" title="${t.orgLabel}: ${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>`;
+        let gradeHtml = '';
+        if (sel && _isGradable(t.id)) {
+            const g = _diagGrade(entry);
+            gradeHtml = `<span class="grade-btns">${FOETO_GRADES[t.id].map(gi =>
+                `<span class="grade-btn${g===gi.grade?' active':''}" title="${gi.desc}" onclick="event.stopPropagation();labelSetGrade('${t.id}',${gi.grade})">G${gi.grade}</span>`
+            ).join('')}</span>`;
+        }
+        return `<span class="ann-diag-tag ${sel}" title="${t.orgLabel}: ${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>${gradeHtml}`;
     }).join('');
 }
 

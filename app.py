@@ -866,6 +866,19 @@ def api_foeto_organs():
     return jsonify({"organs": base, "sub_organs": list(_SUB_ORGANS.keys())})
 
 
+@app.route("/api/foeto/grades")
+def api_foeto_grades():
+    if not os.path.exists(FOETO_DB):
+        return jsonify({"grades": {}})
+    conn = sqlite3.connect(FOETO_DB)
+    rows = conn.execute("SELECT term_id, grade, desc_fr FROM foeto_grades ORDER BY term_id, grade").fetchall()
+    conn.close()
+    grades = {}
+    for term_id, grade, desc_fr in rows:
+        grades.setdefault(term_id, []).append({"grade": grade, "desc": desc_fr})
+    return jsonify({"grades": grades})
+
+
 @app.route("/api/foeto/terms")
 def api_foeto_terms():
     organs = request.args.get("organs", "")
