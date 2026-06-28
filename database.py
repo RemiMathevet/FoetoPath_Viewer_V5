@@ -121,6 +121,16 @@ CREATE TABLE IF NOT EXISTS slide_notes (
     updated_at  TEXT NOT NULL
 );
 
+-- ── Diagnostic d'annotation (contexte LDA/embedding, distinct de labellisation) ─
+CREATE TABLE IF NOT EXISTS annotation_diagnosis (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slide_id    TEXT NOT NULL REFERENCES slides(slide_id) ON DELETE CASCADE,
+    diagnosis   TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    UNIQUE(slide_id, diagnosis)
+);
+CREATE INDEX IF NOT EXISTS idx_ann_diag_slide ON annotation_diagnosis(slide_id);
+
 CREATE INDEX IF NOT EXISTS idx_diagnoses_slide   ON diagnoses(slide_id);
 CREATE INDEX IF NOT EXISTS idx_annotations_slide ON annotations(slide_id);
 CREATE INDEX IF NOT EXISTS idx_embeddings_slide  ON embeddings(slide_id);
@@ -196,6 +206,23 @@ def set_diagnoses(conn, slide_id, diagnosis_list):
             "INSERT INTO diagnoses (slide_id, diagnosis, created_at) VALUES (?, ?, ?)",
             (slide_id, diag, now))
     conn.commit()
+
+
+def set_annotation_diagnoses(conn, slide_id, diagnosis_list):
+    now = _now()
+    conn.execute("DELETE FROM annotation_diagnosis WHERE slide_id = ?", (slide_id,))
+    for diag in diagnosis_list:
+        conn.execute(
+            "INSERT INTO annotation_diagnosis (slide_id, diagnosis, created_at) VALUES (?, ?, ?)",
+            (slide_id, diag, now))
+    conn.commit()
+
+
+def get_annotation_diagnoses(conn, slide_id):
+    rows = conn.execute(
+        "SELECT diagnosis FROM annotation_diagnosis WHERE slide_id = ? ORDER BY diagnosis",
+        (slide_id,)).fetchall()
+    return [r["diagnosis"] for r in rows]
 
 
 def get_diagnoses(conn, slide_id):
