@@ -945,10 +945,10 @@ function closePanelRight() {
 function toggleAnnotationMode() {
     if (state.viewMode !== 'slide') { toast('Annotations disponibles uniquement sur les lames', true); return; }
     const panel = document.getElementById('annPanel');
-    if (panel.classList.contains('visible') && state.annMode) {
+    if (panel.classList.contains('visible')) {
         closePanelRight();
     } else {
-        openPanelRight('annotate');
+        openPanelRight('label');
     }
 }
 
