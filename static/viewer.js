@@ -558,6 +558,7 @@ let FOETO_ORGANS = [];         // all available organs
 let FOETO_TERMS_CACHE = {};    // {organ: {axis: [{id,label}]}}
 let FOETO_QUICK_CACHE = {};    // {organ: [{id,label}]}
 let FOETO_RETENTION_CACHE = {}; // {organ: [{id,label}]}
+let FOETO_MATURATION_CACHE = {}; // {organ: [{id,label}]}
 let FOETO_GRADES = {};         // {term_id: [{grade, desc}]}
 let _allFoetusOptions = [];    // flat list for search filter
 let _allSignOptions = [];      // flat list for sign search
@@ -2096,8 +2097,8 @@ function labelRefreshUI() {
     document.getElementById('btnPatho').classList.toggle('active', anyPatho);
 
     document.getElementById('labelSignsSection').style.display = anyPatho ? '' : 'none';
-    document.getElementById('labelRetentionSection').style.display =
-        (anyPatho && state.domain === 'foetus') ? '' : 'none';
+    document.getElementById('labelRetentionSection').style.display = anyPatho ? '' : 'none';
+    document.getElementById('labelMaturationSection').style.display = hasOrgan ? '' : 'none';
 
     // Sync tissue buttons in placenta mode
     if (state.domain === 'placenta') {
@@ -2157,13 +2158,15 @@ function setOrganStatus(status) {
 function _loadLabelTerms() {
     const organs = Object.keys(state.labelOrgans);
     if (organs.length === 0) return;
-    // Reuse the existing foeto terms fetch
-    fetch(_url('/api/foeto/terms?organs=' + organs.join(','))).then(r => r.json()).then(data => {
+    const queryOrgans = state.domain === 'placenta' ? [...new Set([...organs, 'placenta'])] : organs;
+    fetch(_url('/api/foeto/terms?organs=' + queryOrgans.join(','))).then(r => r.json()).then(data => {
         Object.assign(FOETO_TERMS_CACHE, data.terms || {});
         Object.assign(FOETO_QUICK_CACHE, data.quick || {});
         Object.assign(FOETO_RETENTION_CACHE, data.retention || {});
+        Object.assign(FOETO_MATURATION_CACHE, data.maturation || {});
         labelRenderQuickTags();
         labelRenderRetentionTags();
+        labelRenderMaturationTags();
         _buildLabelSignOptions();
     }).catch(() => {});
 }
@@ -2206,7 +2209,7 @@ function labelToggleDiag(id) {
     const existing = _findDiagEntry(state.labelDiagnoses, id);
     if (existing) state.labelDiagnoses.splice(state.labelDiagnoses.indexOf(existing), 1);
     else state.labelDiagnoses.push(id);
-    labelRenderQuickTags(); labelRenderRetentionTags();
+    labelRenderQuickTags(); labelRenderRetentionTags(); labelRenderMaturationTags();
 }
 
 function labelSetGrade(termId, grade) {
@@ -2215,7 +2218,7 @@ function labelSetGrade(termId, grade) {
     const cur = _diagGrade(existing || '');
     // ponytail: toggle off if same grade clicked again
     state.labelDiagnoses.push(cur === grade ? termId : `${termId}.G${grade}`);
-    labelRenderQuickTags(); labelRenderRetentionTags();
+    labelRenderQuickTags(); labelRenderRetentionTags(); labelRenderMaturationTags();
 }
 
 function labelRenderRetentionTags() {
@@ -2242,6 +2245,38 @@ function labelRenderRetentionTags() {
             }
             return `<span class="ann-diag-tag retention-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}${simBtn}</span>${gradeHtml}`;
         }).join('');
+    }
+    el.innerHTML = html || '';
+}
+
+function labelRenderMaturationTags() {
+    const el = document.getElementById('labelMaturationTags');
+    if (!el) return;
+    const organs = Object.keys(state.labelOrgans);
+    let html = '';
+    for (const org of organs) {
+        const items = FOETO_MATURATION_CACHE[org] || [];
+        if (items.length === 0) continue;
+        const label = _ORGAN_LABELS[org] || org;
+        html += `<span style="font-size:9px;color:var(--text-muted);width:100%;margin-top:2px;">${label}</span>`;
+        const grouped = {};
+        for (const t of items) { (grouped[t.group || ''] ??= []).push(t); }
+        for (const [grp, gItems] of Object.entries(grouped)) {
+            if (grp) html += `<span class="tag-group-label">${grp}</span>`;
+            html += gItems.map(t => {
+                const entry = _findDiagEntry(state.labelDiagnoses, t.id);
+                const sel = entry ? 'selected' : '';
+                const short = t.label.length > 50 ? t.label.slice(0, 48) + '...' : t.label;
+                let gradeHtml = '';
+                if (sel && _isGradable(t.id)) {
+                    const g = _diagGrade(entry);
+                    gradeHtml = `<span class="grade-btns">${FOETO_GRADES[t.id].map(gi =>
+                        `<span class="grade-btn${g===gi.grade?' active':''}" title="${gi.desc}" onclick="event.stopPropagation();labelSetGrade('${t.id}',${gi.grade})">G${gi.grade}</span>`
+                    ).join('')}</span>`;
+                }
+                return `<span class="ann-diag-tag maturation-tag ${sel}" title="${t.label}" onclick="labelToggleDiag('${t.id}')">${short}</span>${gradeHtml}`;
+            }).join('');
+        }
     }
     el.innerHTML = html || '';
 }

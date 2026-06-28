@@ -759,11 +759,16 @@ def annotations_report():
     if os.path.exists(FOETO_DB):
         fconn = sqlite3.connect(FOETO_DB)
         label_map = {r[0]: r[1] for r in fconn.execute("SELECT id, label_fr FROM foeto_terms").fetchall()}
+        axis_map = {r[0]: r[1] for r in fconn.execute("SELECT id, axis FROM foeto_terms").fetchall()}
         fconn.close()
 
     def _resolve(foeto_id):
         foeto_id = str(foeto_id)
         return {"id": foeto_id, "label": label_map.get(foeto_id, foeto_id)}
+
+    def _axis_of(foeto_id):
+        base = str(foeto_id).split(".G")[0]
+        return axis_map.get(base, "")
 
     slides = find_slides(folder)
     report = []
@@ -775,6 +780,7 @@ def annotations_report():
             "organs": [],
             "diagnosis": [],
             "retention": [],
+            "maturation": [],
             "annotations": [],
         }
         if ann_path.is_file():
@@ -786,8 +792,11 @@ def annotations_report():
                 if tissue:
                     entry["organs"] = [t.strip() for t in tissue.split(",") if t.strip()]
                 for diag in meta.get("slide_diagnosis", []):
-                    if "_ret" in str(diag):
+                    ax = _axis_of(diag)
+                    if ax == "retention":
                         entry["retention"].append(_resolve(diag))
+                    elif ax == "maturation":
+                        entry["maturation"].append(_resolve(diag))
                     else:
                         entry["diagnosis"].append(_resolve(diag))
                 for feat in geojson.get("features", []):
@@ -897,7 +906,7 @@ def api_foeto_terms():
         ph = ",".join("?" * len(real_organs))
         all_rows += conn.execute(
             f"SELECT id, organe, label_fr, axis, viewer_quick, type_patho "
-            f"FROM foeto_terms WHERE organe IN ({ph}) AND axis IN ('pathologie','retention') "
+            f"FROM foeto_terms WHERE organe IN ({ph}) AND axis IN ('pathologie','retention','maturation') "
             f"ORDER BY organe, axis, label_fr", real_organs
         ).fetchall()
 
@@ -905,7 +914,7 @@ def api_foeto_terms():
         parent, pattern = _SUB_ORGANS[sub]
         all_rows += [(dict(r), sub) for r in conn.execute(
             "SELECT id, organe, label_fr, axis, viewer_quick, type_patho "
-            "FROM foeto_terms WHERE organe=? AND label_fr LIKE ? AND axis IN ('pathologie','retention') "
+            "FROM foeto_terms WHERE organe=? AND label_fr LIKE ? AND axis IN ('pathologie','retention','maturation') "
             "ORDER BY axis, label_fr", (parent, pattern)
         ).fetchall()]
 
@@ -914,6 +923,7 @@ def api_foeto_terms():
     terms = {}
     quick = {}
     retention = {}
+    maturation = {}
     for item in all_rows:
         if isinstance(item, tuple):
             r, display_org = item
@@ -922,19 +932,16 @@ def api_foeto_terms():
             display_org = r["organe"]
         ax = r["axis"]
         tp = r["type_patho"] or ""
+        entry = {"id": r["id"], "label": r["label_fr"], "group": tp}
         if ax == "retention":
-            retention.setdefault(display_org, []).append({
-                "id": r["id"], "label": r["label_fr"], "group": tp,
-            })
+            retention.setdefault(display_org, []).append(entry)
+        elif ax == "maturation":
+            maturation.setdefault(display_org, []).append(entry)
         else:
-            terms.setdefault(display_org, {}).setdefault(ax, []).append({
-                "id": r["id"], "label": r["label_fr"], "group": tp,
-            })
+            terms.setdefault(display_org, {}).setdefault(ax, []).append(entry)
         if r["viewer_quick"]:
-            quick.setdefault(display_org, []).append({
-                "id": r["id"], "label": r["label_fr"], "group": tp,
-            })
-    return jsonify({"terms": terms, "quick": quick, "retention": retention})
+            quick.setdefault(display_org, []).append(entry)
+    return jsonify({"terms": terms, "quick": quick, "retention": retention, "maturation": maturation})
 
 
 # ── Label API (organ status + notes) ───────────────────────────────────────
