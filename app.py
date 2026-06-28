@@ -612,8 +612,7 @@ def annotations_save():
         slide_id = Path(slide_path).stem
         db.upsert_slide(conn, slide_id, Path(slide_path).name,
                         str(Path(slide_path).parent), tissue_type, calibration)
-        if slide_diagnosis:
-            db.set_diagnoses(conn, slide_id, slide_diagnosis)
+        # ponytail: diagnoses gérés uniquement par labelSave, pas ici
         db.save_annotations(conn, slide_id, tissue_type, features, mpp_x, mpp_y)
 
         return jsonify({
